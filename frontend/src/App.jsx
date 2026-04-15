@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { ethers } from "ethers";
 import "./App.css";
-
 import { CONTRACT_ADDRESS } from "./config";
 
 const CONTRACT_ABI = [
@@ -16,7 +15,7 @@ function App() {
   const [status, setStatus] = useState("Not connected");
   const [itemName, setItemName] = useState("");
   const [itemPrice, setItemPrice] = useState("");
-  const [listedItem, setListedItem] = useState(null);
+  const [items, setItems] = useState([]);
 
   async function connectWallet() {
     try {
@@ -66,78 +65,58 @@ function App() {
       setStatus("Item listed successfully");
       setItemName("");
       setItemPrice("");
+      await loadAllItems();
     } catch (error) {
       console.error(error);
       setStatus("Listing failed");
     }
   }
 
-  async function fetchLatestItem() {
+  async function loadAllItems() {
     try {
-      if (!window.ethereum) {
-        setStatus("MetaMask not found");
-        return;
-      }
-
       const provider = new ethers.BrowserProvider(window.ethereum);
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
 
       const count = await contract.itemCount();
+      const loadedItems = [];
 
-      if (count == 0) {
-        setStatus("No items found");
-        return;
+      for (let i = 1; i <= Number(count); i++) {
+        const item = await contract.items(i);
+
+        loadedItems.push({
+          id: item.id.toString(),
+          name: item.name,
+          price: ethers.formatEther(item.price),
+          seller: item.seller,
+          owner: item.owner,
+          sold: item.sold,
+        });
       }
 
-      const item = await contract.items(count);
-
-      setListedItem({
-        id: item.id.toString(),
-        name: item.name,
-        price: ethers.formatEther(item.price),
-        seller: item.seller,
-        owner: item.owner,
-        sold: item.sold,
-      });
-
-      setStatus("Latest item loaded");
+      setItems(loadedItems);
+      setStatus("Items loaded successfully");
     } catch (error) {
       console.error(error);
-      setStatus("Failed to fetch item");
+      setStatus("Failed to load items");
     }
   }
 
-  async function buyLatestItem() {
+  async function buyItem(itemId, itemPrice) {
     try {
-      if (!window.ethereum) {
-        setStatus("MetaMask not found");
-        return;
-      }
-
-      if (!listedItem) {
-        setStatus("Load an item first");
-        return;
-      }
-
-      if (listedItem.sold) {
-        setStatus("Item already sold");
-        return;
-      }
-
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
       setStatus("Buying item...");
 
-      const tx = await contract.buyItem(listedItem.id, {
-        value: ethers.parseEther(listedItem.price),
+      const tx = await contract.buyItem(itemId, {
+        value: ethers.parseEther(itemPrice),
       });
 
       await tx.wait();
 
       setStatus("Item purchased successfully");
-      await fetchLatestItem();
+      await loadAllItems();
     } catch (error) {
       console.error(error);
       setStatus("Purchase failed");
@@ -178,25 +157,30 @@ function App() {
 
       <hr style={{ margin: "2rem 0" }} />
 
-      <h2>View Latest Item</h2>
-      <button onClick={fetchLatestItem}>Load Latest Item</button>
+      <h2>Marketplace Items</h2>
+      <button onClick={loadAllItems}>Load All Items</button>
 
-      {listedItem && (
-        <div style={{ marginTop: "1rem", border: "1px solid #ccc", padding: "1rem", width: "500px" }}>
-          <p><strong>ID:</strong> {listedItem.id}</p>
-          <p><strong>Name:</strong> {listedItem.name}</p>
-          <p><strong>Price:</strong> {listedItem.price} ETH</p>
-          <p><strong>Seller:</strong> {listedItem.seller}</p>
-          <p><strong>Owner:</strong> {listedItem.owner}</p>
-          <p><strong>Sold:</strong> {listedItem.sold ? "Yes" : "No"}</p>
+      <div style={{ marginTop: "1rem" }}>
+        {items.map((item) => (
+          <div
+            key={item.id}
+            style={{ marginBottom: "1rem", border: "1px solid #ccc", padding: "1rem", width: "500px" }}
+          >
+            <p><strong>ID:</strong> {item.id}</p>
+            <p><strong>Name:</strong> {item.name}</p>
+            <p><strong>Price:</strong> {item.price} ETH</p>
+            <p><strong>Seller:</strong> {item.seller}</p>
+            <p><strong>Owner:</strong> {item.owner}</p>
+            <p><strong>Sold:</strong> {item.sold ? "Yes" : "No"}</p>
 
-          {!listedItem.sold && (
-            <button onClick={buyLatestItem} style={{ marginTop: "1rem" }}>
-              Buy Latest Item
-            </button>
-          )}
-        </div>
-      )}
+            {!item.sold && item.seller.toLowerCase() !== account.toLowerCase() && (
+              <button onClick={() => buyItem(item.id, item.price)}>
+                Buy Item
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
