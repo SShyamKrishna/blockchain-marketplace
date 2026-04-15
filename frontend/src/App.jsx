@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ethers } from "ethers";
 import "./App.css";
 
-const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+import { CONTRACT_ADDRESS } from "./config";
 
 const CONTRACT_ABI = [
   "function listItem(string memory _name, uint256 _price) public",
